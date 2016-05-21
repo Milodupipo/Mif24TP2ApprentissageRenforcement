@@ -1,0 +1,7 @@
+build/
+build.xml
+IAMDPLibjavadoc/
+manifest.mf
+nbproject/
+lib/
+
