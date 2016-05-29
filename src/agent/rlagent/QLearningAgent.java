@@ -7,6 +7,7 @@ import java.util.List;
 import environnement.Action;
 import environnement.Environnement;
 import environnement.Etat;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Vector;
@@ -26,59 +27,22 @@ public class QLearningAgent extends RLAgent {
      * @param gamma
      * @param Environnement
      */
-    Map< Etat, Map< Action, Double>> QValeur = new HashMap<Etat, Map< Action, Double>>();
-    Map< Etat, Vector< Double>> QValeurv2 = new HashMap<Etat, Vector< Double>>();
-    //Un vAction pour avoir les actions dispos
-    //Un vEtat poru les etats dispos
-    //Un Vec < Vec< > > pour sauvegarder les données en rapport avec les etats et actions
-    Vector< Vector< Double>> QValeurv3 = new Vector< Vector< Double>>();
-    Vector< Etat> vEtat = new Vector< Etat>();
-    Vector< Action> vAction = new Vector< Action>();
+    protected Map< Etat, Map< Action, Double>> QValeur = new HashMap<Etat, Map< Action, Double>>();
 
     public QLearningAgent(double alpha, double gamma, Environnement _env) {
         super(alpha, gamma, _env);
-        final int nbEtat = 12;
-        final int nbAction = 4;
-
-        for (int i = 0; i < nbEtat; i++) {
-            QValeurv3.add(new Vector< Double>());
-            for (int j = 0; j < nbAction; j++) {
-                double random = ThreadLocalRandom.current().nextInt(0, 100 + 1);
-                QValeurv3.get(i).add(random);
-            }
-        }
-        Etat e = env.getEtatCourant();
     }
 
-    void mettreAjourVec(Etat e, Action a) {
+    void agrandirMap(Etat e, Action a) {
         boolean pasTrouver = true;
-        //Etat maj
-        if (vEtat.isEmpty()) {
-            vEtat.add(e);
-        } else {
-            for (int i = 0; i < vEtat.size(); i++) {
-                if (vEtat.get(i).equals(e)) {
-                    pasTrouver = false;
-                    break;
-                }
-            }
-            if (pasTrouver) {
-                vEtat.add(e);
-            }
-        }
-        pasTrouver = true;
-        //Action maj
-        if (vAction.isEmpty()) {
-            vAction.add(a);
-        } else {
-            for (int i = 0; i < vAction.size(); i++) {
-                if (vAction.get(i).equals(a)) {
-                    pasTrouver = false;
-                    break;
-                }
-            }
-            if (pasTrouver) {
-                vAction.add(a);
+        //pour QValeur
+        List< Action> la = this.getActionsLegales(e);
+        try {
+            QValeur.get(e).get(la.get(0));
+        } catch (Exception ex) {
+            QValeur.put(e, new HashMap<Action, Double>());
+            for (int i = 0; i < la.size(); i++) {
+                QValeur.get(e).put(la.get(i), (double) ThreadLocalRandom.current().nextInt(10, 100));
             }
         }
     }
@@ -91,31 +55,36 @@ public class QLearningAgent extends RLAgent {
     @Override
     public List<Action> getPolitique(Etat e) {
         //TODO
-        List< Action> la = this.getActionsLegales(e);
-        //Ajout de l'action au vector d'action si on ne la jamais faite
-        /*for (Action a : la) {
-         mettreAjourVec(e, a);
-         }*/
-        //Retourne les actions qui ont la plus forte valeur
-        for (int i = 0; i < vEtat.size(); i++) {
-            if (vEtat.get(i).equals(e)) {
-                double indiceMin = 0;
-                double min = QValeurv3.get(i).get(0);
-                Vector< Double> vtmp = QValeurv3.get(i);
-                for (int j = 1; j < vtmp.size(); j++) {
-                    if (QValeurv3.get(i).get(j) > min) {
-                        la.remove((int) indiceMin);
-                        vtmp.remove((int) indiceMin);
-                        min = vtmp.get(0);
-                        indiceMin = 0;
-                        j = 0;
-                    } else if (vtmp.get(j) < min) {
-                        min = vtmp.get(j);
-                        indiceMin = j;
-                        j = -1;
-                    }
+        //Recherche les valeurs Double de la map pour l'état courant
+        Vector<Double> vd = new Vector<Double>();
+        Map<Action, Double> mtmp = (Map<Action, Double>) QValeur.get(e);
+        List<Action> la = new LinkedList<Action>();
+        try {
+            for (Entry action : mtmp.entrySet()) {
+                la.add((Action) action.getKey());
+                vd.add((Double) action.getValue());
+            }
+        } catch (Exception ex) {
+            la = this.getActionsLegales(e);
+            return la;
+        }
+        //On cherche les meilleures actions possible en fonction de leur valeur
+        //Puis on retourne la liste de argmax(valeur)
+        int indiceMin = 0;
+        if (!vd.isEmpty()) {
+            double min = vd.get(0);
+            for (int i = 1; i < vd.size(); i++) {
+                if (vd.get(i) > min) {
+                    la.remove(indiceMin);
+                    vd.remove(indiceMin);
+                    min = vd.get(0);
+                    indiceMin = 0;
+                    i = 0;
+                } else if (vd.get(i) < min) {
+                    min = vd.get(i);
+                    indiceMin = i;
+                    i = -1;
                 }
-                break;
             }
         }
         return la;
@@ -127,18 +96,16 @@ public class QLearningAgent extends RLAgent {
     @Override
     public double getValeur(Etat e) {
         //TODO
-        int numE = 0;
         double max = 0;
-        for (int i = 0; i < vEtat.size(); i++) {
-            if (vEtat.get(i).equals(e)) {
-                numE = i;
-                break;
+        Map<Action, Double> mtmp = QValeur.get(e);
+        try {
+            for (Entry action : mtmp.entrySet()) {
+                if (max < (Double) action.getValue()) {
+                    max = (Double) action.getValue();
+                }
             }
-        }
-        for (int i = 0; i < QValeurv3.get(numE).size(); i++) {
-            if (max < QValeurv3.get(numE).get(i)) {
-                max = QValeurv3.get(numE).get(i);
-            }
+        } catch (Exception ex) {
+            return 0.0;
         }
         return max;
     }
@@ -152,28 +119,11 @@ public class QLearningAgent extends RLAgent {
     @Override
     public double getQValeur(Etat e, Action a) {
         //TODO
-        /*for (int i = 0; i < vEtat.size(); i++) {
-         if (vEtat.get(i) == e) {
-         QValeurv3.get(i).
-         }
-         }*/
-        int numE = 0, numA = 0;
-        for (int i = 0; i < vEtat.size(); i++) {
-            if (vEtat.get(i).equals(e)) {
-                numE = i;
-                break;
-            }
+        try {
+            return QValeur.get(e).get(a);
+        } catch (Exception ex) {
+            return 0.0;
         }
-        for (int i = 0; i < vAction.size(); i++) {
-            if (vAction.get(i).equals(a)) {
-                numA = i;
-                break;
-            }
-        }
-        if (!QValeurv3.isEmpty()) {
-            return QValeurv3.get(numE).get(numA);
-        }
-        return 0.0;
     }
 
     /**
@@ -182,34 +132,22 @@ public class QLearningAgent extends RLAgent {
     @Override
     public void setQValeur(Etat e, Action a, double d) {
         //TODO
-        /*for (Entry entreEtat : QValeur.entrySet()) {
-         Map< Action, Double > map = (Map< Action, Double >)entreEtat;
-         for (Entry entreAction : map.entrySet()) {
-                
-         }
-         }*/
-        if (d < vmin) {
-            vmin = d;
-        } else if (d > vmax) {
-            vmax = d;
-        }
-        //QValeur.get(e).put(a, d);
-        //mise a jour vmin et vmax pour affichage gradient de couleur
-        //...
-        int numE = 0, numA = 0;
-        for (int i = 0; i < vEtat.size(); i++) {
-            if (vEtat.get(i).equals(e)) {
-                numE = i;
-                break;
+        //On actualise la valeur dans la map et on recherche vmin et vmax
+        QValeur.get(e).replace(a, d);
+        double min = d, max = 0;
+        for (Entry map : QValeur.entrySet()) {
+            Map<Action, Double> mtmp = (Map<Action, Double>) map.getValue();
+            for (Entry eAct : mtmp.entrySet()) {
+                if ((Double) eAct.getValue() < min) {
+                    min = (Double) eAct.getValue();
+                }
+                if ((Double) eAct.getValue() > max) {
+                    max = (Double) eAct.getValue();
+                }
             }
         }
-        for (int i = 0; i < vAction.size(); i++) {
-            if (vAction.get(i).equals(a)) {
-                numA = i;
-                break;
-            }
-        }
-        QValeurv3.get(numE).set(numA, d);
+        vmin = min;
+        vmax = max;
         this.notifyObs();
     }
 
@@ -228,26 +166,14 @@ public class QLearningAgent extends RLAgent {
     @Override
     public void endStep(Etat e, Action a, Etat esuivant, double reward) {
         //TODO
-        mettreAjourVec(e, a);
+        //On ajoute l'etat à la map si nous ne somme jamais tombé dessus avant
+        agrandirMap(e, a);
         double proba = 1 - this.alpha;
-        //Valeur actuelle
         double valeur = getQValeur(e, a);
         double valeurS = getValeur(esuivant);
         double resultat = proba * valeur + this.alpha * (reward + this.getGamma() * valeurS);
-        int numE = 0, numA = 0;
-        for (int i = 0; i < vEtat.size(); i++) {
-            if (vEtat.get(i).equals(e)) {
-                numE = i;
-                break;
-            }
-        }
-        for (int i = 0; i < vAction.size(); i++) {
-            if (vAction.get(i).equals(a)) {
-                numA = i;
-                break;
-            }
-        }
-        QValeurv3.get(numE).set(numA, resultat);
+        //On acutalise la map et les vmin/vmax
+        this.setQValeur(e, a, resultat);
         this.env.setEtatCourant(esuivant);
     }
 
@@ -264,21 +190,8 @@ public class QLearningAgent extends RLAgent {
     public void reset() {
         super.reset();
         this.episodeNb = 0;
-        //TODO
-        final int nbEtat = 12;
-        final int nbAction = 4;
-        for (int i = 0; i < QValeurv3.size(); i++) {
-            QValeurv3.get(i).clear();
-        }
-        vEtat.clear();
-        vAction.clear();
-        for (int i = 0; i < nbEtat; i++) {
-            QValeurv3.add(new Vector< Double>());
-            for (int j = 0; j < nbAction; j++) {
-                double random = ThreadLocalRandom.current().nextInt(0, 100 + 1);
-                QValeurv3.get(i).add(random);
-            }
-        }
+        QValeur.clear();
+
         this.notifyObs();
     }
 
